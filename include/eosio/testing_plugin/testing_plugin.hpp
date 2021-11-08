@@ -34,10 +34,7 @@ namespace eosio {
             testing_plugin();
             virtual ~testing_plugin();
 
-            signed_block_ptr _produce_block(fc::microseconds skip_time);
-
-            void _start_block(fc::time_point block_time);
-            signed_block_ptr _finish_block();
+            void _produce_block(fc::microseconds skip_time);
 
             APPBASE_PLUGIN_REQUIRES((chain_plugin)(http_plugin))
             virtual void set_program_options(options_description&, options_description& cfg) override;
@@ -48,7 +45,6 @@ namespace eosio {
 
         private:
             std::unique_ptr<class testing_plugin_impl> my;
-            map<account_name, block_id_type> last_produced_block;
             controller* control;
     };
 

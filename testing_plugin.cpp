@@ -10,58 +10,26 @@ class testing_plugin_impl {
 testing_plugin::testing_plugin():my(new testing_plugin_impl()){}
 testing_plugin::~testing_plugin(){}
 
-signed_block_ptr testing_plugin::_produce_block(fc::microseconds skip_time) {
+void testing_plugin::_produce_block(fc::microseconds skip_time) {
     auto head = control->head_block_state();
     auto head_time = control->head_block_time();
     auto next_time = head_time + skip_time;
 
-    if(!control->is_building_block() || control->pending_block_time() != next_time) {
-        _start_block( next_time );
+    if (control->is_building_block()) {
+        vector<private_key_type> keys;
+        for (auto producer : control->active_producers().producers)
+            keys.push_back(get_private_key(producer.producer_name.to_string(), "active"));
+        
+        control->finalize_block([&](digest_type d) {
+            std::vector<signature_type> result;
+            for (auto key : keys)
+                result.push_back(key.sign(d));
+
+            return result;
+        });
+        control->commit_block();
     }
-
-    auto head_block = _finish_block();
-
-    _start_block( next_time + fc::microseconds(chain::config::block_interval_us));
-    return head_block;
-}
-
-void testing_plugin::_start_block(fc::time_point block_time) {
-    auto head_block_number = control->head_block_num();
-    auto producer = control->head_block_state()->get_scheduled_producer(block_time);
-
-    auto last_produced_block_num = control->last_irreversible_block_num();
-    auto itr = last_produced_block.find(producer.producer_name);
-    if (itr != last_produced_block.end()) {
-        last_produced_block_num = std::max(control->last_irreversible_block_num(), block_header::num_from_id(itr->second));
-    }
-
-    control->start_block(
-        block_time,
-        head_block_number - last_produced_block_num,
-        control->head_block_state()->get_new_protocol_feature_activations());
-
-}
-
-signed_block_ptr testing_plugin::_finish_block() {
-    FC_ASSERT(control->is_building_block(), "must first start a block before it can be finished");
-
-    auto producer = control->head_block_state()->get_scheduled_producer(control->pending_block_time());
-    vector<private_key_type> signing_keys;
-    signing_keys.push_back(get_private_key("eosio", "active"));
-
-    control->finalize_block([&](digest_type d) {
-        std::vector<signature_type> result;
-        result.reserve(signing_keys.size());
-        for (const auto& k: signing_keys)
-            result.emplace_back(k.sign(d));
-
-        return result;
-    });
-
-    control->commit_block();
-    last_produced_block[control->head_block_state()->header.producer] = control->head_block_state()->id;
-
-    return control->head_block_state()->block;
+    control->start_block(next_time, 0);
 }
 
 void testing_plugin::set_program_options(options_description&, options_description& cfg) {}
@@ -73,7 +41,7 @@ void testing_plugin::plugin_initialize(const variables_map& options) {
 void testing_plugin::plugin_startup() {
    // Make the magic happen
 
-    control = &app().get_plugin<chain_plugin>().chain(); 
+    control = &app().get_plugin<chain_plugin>().chain();
 
     ilog("testing plugin init.");
     app().get_plugin<http_plugin>().add_api({
@@ -96,6 +64,28 @@ void testing_plugin::plugin_startup() {
                 callback(200, std::string("ok"));
             } catch (...) {
                 http_plugin::handle_exception("testing", "skiptime", body, callback);
+            }
+        }}
+    });
+    app().get_plugin<http_plugin>().add_api({
+        {"/v1/testing/debug", [&](std::string url, std::string body, url_response_callback callback) {
+            try {
+                std::string out;
+
+                out += "head block num: ";
+                out += std::to_string(control->head_block_num());
+                out += "\n";
+                out += "head block time: ";
+                out += std::to_string(control->head_block_time().sec_since_epoch());
+                out += "\n";
+                out += "head block producer: ";
+                out += control->head_block_producer().to_string();
+                out += "\n";
+
+
+                callback(200, out);
+            } catch (...) {
+                http_plugin::handle_exception("testing", "debug", body, callback);
             }
         }}
     });
