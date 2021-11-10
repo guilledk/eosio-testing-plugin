@@ -1,5 +1,6 @@
 #include <eosio/testing_plugin/testing_plugin.hpp>
 
+
 namespace eosio {
    static appbase::abstract_plugin& _testing_plugin = app().register_plugin<testing_plugin>();
 
@@ -16,14 +17,11 @@ void testing_plugin::_produce_block(fc::microseconds skip_time) {
     auto next_time = head_time + skip_time;
 
     if (control->is_building_block()) {
-        vector<private_key_type> keys;
-        for (auto producer : control->active_producers().producers)
-            keys.push_back(get_private_key(producer.producer_name.to_string(), "active"));
-        
         control->finalize_block([&](digest_type d) {
             std::vector<signature_type> result;
-            for (auto key : keys)
-                result.push_back(key.sign(d));
+
+            //auto key = 
+            //result.push_back(key.sign(d));
 
             return result;
         });
@@ -42,48 +40,69 @@ void testing_plugin::plugin_startup() {
    // Make the magic happen
 
     control = &app().get_plugin<chain_plugin>().chain();
+    wallet = &app().get_plugin<wallet_plugin>().get_wallet_manager();
+    wallet->set_dir(string("/root/eosio-wallet"));
+    wallet->open(string("default"));
 
     ilog("testing plugin init.");
     app().get_plugin<http_plugin>().add_api({
-        {"/v1/testing/version", [&](std::string url, std::string body, url_response_callback callback) {
+        {"/v1/testing/version", [&](string url, string body, url_response_callback callback) {
             try {
-                callback(200, std::string("v0.1a0"));
+                callback(200, string("v0.1a0"));
             } catch (...) {
                 http_plugin::handle_exception("testing", "version", body, callback);
             }
         }}
     });
     app().get_plugin<http_plugin>().add_api({
-        {"/v1/testing/skiptime", [&](std::string url, std::string body, url_response_callback callback) {
+        {"/v1/testing/unlock", [&](string url, string body, url_response_callback callback) {
+            try {
+				fc::variant args = fc::json::from_string(body).get_object();
+
+                wallet->unlock(string("default"), args["pass"].as_string()); 
+
+                callback(200, string("ok"));
+            } catch (...) {
+                http_plugin::handle_exception("testing", "version", body, callback);
+            }
+        }}
+    });
+    app().get_plugin<http_plugin>().add_api({
+        {"/v1/testing/skiptime", [&](string url, string body, url_response_callback callback) {
             try {
 				fc::variant args = fc::json::from_string(body).get_object();
                 fc::microseconds skip_time(args["time"].as_int64());
                
                 _produce_block(skip_time);
 
-                callback(200, std::string("ok"));
+                callback(200, string("ok"));
             } catch (...) {
                 http_plugin::handle_exception("testing", "skiptime", body, callback);
             }
         }}
     });
     app().get_plugin<http_plugin>().add_api({
-        {"/v1/testing/debug", [&](std::string url, std::string body, url_response_callback callback) {
+        {"/v1/testing/debug", [&](string url, string body, url_response_callback callback) {
             try {
-                std::string out;
+                string ret;
 
-                out += "head block num: ";
-                out += std::to_string(control->head_block_num());
-                out += "\n";
-                out += "head block time: ";
-                out += std::to_string(control->head_block_time().sec_since_epoch());
-                out += "\n";
-                out += "head block producer: ";
-                out += control->head_block_producer().to_string();
-                out += "\n";
+                ret += "head_block_num: " + std::to_string(control->head_block_num()) + "\n";
+                ret += "head_block_id: " + control->head_block_id().str() + "\n";
+                ret += "head_block_time: " + std::to_string(control->head_block_time().sec_since_epoch()) + "\n";
+                ret += "head_block_producer: " + control->head_block_producer().to_string() + "\n";
+                ret += "head_block_prev_id: " + control->head_block_header().previous.str() + "\n";
 
+                //ret += "pending_block_time: " + std::to_string(control->pending_block_time().sec_since_epoch()) + "\n";
+                //ret += "pending_block_producer: " + control->pending_block_producer().to_string();
 
-                callback(200, out);
+                ret += "is_building_block: " + std::to_string(control->is_building_block()) + "\n";
+                ret += "is_producing_block: " + std::to_string(control->is_producing_block()) + "\n";
+
+                ret += "wallets: \n";
+                for (string& wallet_name : wallet->list_wallets())
+                    ret += "\t" + wallet_name + "\n";
+
+                callback(200, ret);
             } catch (...) {
                 http_plugin::handle_exception("testing", "debug", body, callback);
             }

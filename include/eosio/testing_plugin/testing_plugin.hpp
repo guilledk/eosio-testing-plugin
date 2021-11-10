@@ -1,5 +1,7 @@
 #pragma once
 #include <eosio/chain_plugin/chain_plugin.hpp>
+#include <eosio/wallet_plugin/wallet_plugin.hpp>
+#include <eosio/wallet_plugin/wallet_manager.hpp>
 #include <eosio/http_plugin/http_plugin.hpp>
 
 #include <eosio/chain/name.hpp>
@@ -7,6 +9,10 @@
 #include <fc/io/json.hpp>
 
 #include <appbase/application.hpp>
+
+
+using std::string;
+using std::to_string;
 
 namespace eosio {
 
@@ -18,17 +24,6 @@ namespace eosio {
     using chain::signed_block_ptr;
     using chain::transaction_trace_ptr;
 
-    template<typename KeyType = fc::ecc::private_key_shim>
-    static auto get_private_key(string keyname, string role = "owner") {
-        auto secret = fc::sha256::hash(keyname + role);
-        return private_key_type::regenerate<KeyType>(secret);
-    }
-
-    template<typename KeyType = fc::ecc::private_key_shim>
-    static auto get_public_key(string keyname, string role = "owner") {
-        return get_private_key<KeyType>(keyname, role).get_public_key();
-    }
-
     class testing_plugin : public appbase::plugin<testing_plugin> {
         public:
             testing_plugin();
@@ -36,7 +31,7 @@ namespace eosio {
 
             void _produce_block(fc::microseconds skip_time);
 
-            APPBASE_PLUGIN_REQUIRES((chain_plugin)(http_plugin))
+            APPBASE_PLUGIN_REQUIRES((chain_plugin)(wallet_plugin)(http_plugin))
             virtual void set_program_options(options_description&, options_description& cfg) override;
             
             void plugin_initialize(const variables_map& options);
@@ -46,6 +41,7 @@ namespace eosio {
         private:
             std::unique_ptr<class testing_plugin_impl> my;
             controller* control;
+            wallet_manager* wallet;
     };
 
 }
