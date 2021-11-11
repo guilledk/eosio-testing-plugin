@@ -41,8 +41,12 @@ void testing_plugin::plugin_startup() {
 
     control = &app().get_plugin<chain_plugin>().chain();
     wallet = &app().get_plugin<wallet_plugin>().get_wallet_manager();
-    wallet->set_dir(string("/root/eosio-wallet"));
-    wallet->open(string("default"));
+
+    string wallet_dir("/root/eosio-wallet");
+    string wallet_name("default");
+
+    wallet->set_dir(wallet_dir);
+    wallet->create(wallet_name);
 
     ilog("testing plugin init.");
     app().get_plugin<http_plugin>().add_api({
@@ -59,7 +63,7 @@ void testing_plugin::plugin_startup() {
             try {
 				fc::variant args = fc::json::from_string(body).get_object();
 
-                wallet->unlock(string("default"), args["pass"].as_string()); 
+                wallet->unlock(wallet_name, args["pass"].as_string()); 
 
                 callback(200, string("ok"));
             } catch (...) {
