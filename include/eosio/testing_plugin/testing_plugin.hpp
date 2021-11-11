@@ -1,7 +1,5 @@
 #pragma once
 #include <eosio/chain_plugin/chain_plugin.hpp>
-#include <eosio/wallet_plugin/wallet_plugin.hpp>
-#include <eosio/wallet_plugin/wallet_manager.hpp>
 #include <eosio/http_plugin/http_plugin.hpp>
 
 #include <eosio/chain/name.hpp>
@@ -29,9 +27,11 @@ namespace eosio {
             testing_plugin();
             virtual ~testing_plugin();
 
+            void _finish_block();
+            void _start_block(chain::time_point when);
             void _produce_block(fc::microseconds skip_time);
 
-            APPBASE_PLUGIN_REQUIRES((chain_plugin)(wallet_plugin)(http_plugin))
+            APPBASE_PLUGIN_REQUIRES((chain_plugin)(http_plugin))
             virtual void set_program_options(options_description&, options_description& cfg) override;
             
             void plugin_initialize(const variables_map& options);
@@ -40,8 +40,8 @@ namespace eosio {
 
         private:
             std::unique_ptr<class testing_plugin_impl> my;
+            private_key_type eosio_key;
             controller* control;
-            wallet_manager* wallet;
     };
 
 }

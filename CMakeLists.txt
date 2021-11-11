@@ -6,7 +6,6 @@ add_library(testing_plugin
 target_link_libraries(
     testing_plugin
     chain_plugin
-    wallet_plugin
     http_plugin
     eosio_chain
     appbase

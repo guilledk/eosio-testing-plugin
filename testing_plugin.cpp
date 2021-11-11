@@ -11,23 +11,39 @@ class testing_plugin_impl {
 testing_plugin::testing_plugin():my(new testing_plugin_impl()){}
 testing_plugin::~testing_plugin(){}
 
+void testing_plugin::_finish_block() {
+    control->finalize_block([&](digest_type d) {
+        std::vector<signature_type> result;
+
+        result.push_back(eosio_key.sign(d));
+        
+        return result;
+    });
+    control->commit_block();
+}
+
+void testing_plugin::_start_block(chain::time_point when) {
+    auto head_block_number = control->head_block_num();
+    auto last_produced_block_num = control->last_irreversible_block_num();
+    auto confirm_block_num = head_block_number - last_produced_block_num;
+
+    control->start_block(when, 0);
+}
+
 void testing_plugin::_produce_block(fc::microseconds skip_time) {
     auto head = control->head_block_state();
     auto head_time = control->head_block_time();
     auto next_time = head_time + skip_time;
 
-    if (control->is_building_block()) {
-        control->finalize_block([&](digest_type d) {
-            std::vector<signature_type> result;
+    if (control->is_building_block())
+        _finish_block();
 
-            //auto key = 
-            //result.push_back(key.sign(d));
+    _start_block(next_time);
 
-            return result;
-        });
-        control->commit_block();
-    }
-    control->start_block(next_time, 0);
+    _finish_block();
+
+    _start_block(
+        next_time + fc::microseconds(chain::config::block_interval_us));
 }
 
 void testing_plugin::set_program_options(options_description&, options_description& cfg) {}
@@ -40,32 +56,14 @@ void testing_plugin::plugin_startup() {
    // Make the magic happen
 
     control = &app().get_plugin<chain_plugin>().chain();
-    wallet = &app().get_plugin<wallet_plugin>().get_wallet_manager();
 
-    string wallet_dir("/root/eosio-wallet");
-    string wallet_name("default");
+    eosio_key = private_key_type(
+        string("5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"));
 
-    wallet->set_dir(wallet_dir);
-    wallet->create(wallet_name);
-
-    ilog("testing plugin init.");
     app().get_plugin<http_plugin>().add_api({
         {"/v1/testing/version", [&](string url, string body, url_response_callback callback) {
             try {
                 callback(200, string("v0.1a0"));
-            } catch (...) {
-                http_plugin::handle_exception("testing", "version", body, callback);
-            }
-        }}
-    });
-    app().get_plugin<http_plugin>().add_api({
-        {"/v1/testing/unlock", [&](string url, string body, url_response_callback callback) {
-            try {
-				fc::variant args = fc::json::from_string(body).get_object();
-
-                wallet->unlock(wallet_name, args["pass"].as_string()); 
-
-                callback(200, string("ok"));
             } catch (...) {
                 http_plugin::handle_exception("testing", "version", body, callback);
             }
@@ -102,16 +100,13 @@ void testing_plugin::plugin_startup() {
                 ret += "is_building_block: " + std::to_string(control->is_building_block()) + "\n";
                 ret += "is_producing_block: " + std::to_string(control->is_producing_block()) + "\n";
 
-                ret += "wallets: \n";
-                for (string& wallet_name : wallet->list_wallets())
-                    ret += "\t" + wallet_name + "\n";
-
                 callback(200, ret);
             } catch (...) {
                 http_plugin::handle_exception("testing", "debug", body, callback);
             }
         }}
     });
+    ilog("testing plugin init.");
 }
 
 void testing_plugin::plugin_shutdown() {
