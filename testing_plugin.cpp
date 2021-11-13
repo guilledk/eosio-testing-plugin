@@ -11,7 +11,15 @@ class testing_plugin_impl {
 testing_plugin::testing_plugin():my(new testing_plugin_impl()){}
 testing_plugin::~testing_plugin(){}
 
-void testing_plugin::_finish_block() {
+void testing_plugin::_skip_time(fc::microseconds time) {
+
+    production->pause();
+    
+    if (control->is_building_block())
+        control->abort_block();
+
+    control->start_block(time_point::now() + time, 0);
+
     control->finalize_block([&](digest_type d) {
         std::vector<signature_type> result;
 
@@ -20,26 +28,21 @@ void testing_plugin::_finish_block() {
         return result;
     });
     control->commit_block();
-}
 
-void testing_plugin::_start_block(chain::time_point when) {
-    control->start_block(when, 0);
-}
+    block_state_ptr new_bs = control->head_block_state();
 
-void testing_plugin::_produce_block(fc::microseconds skip_time) {
-    auto head = control->head_block_state();
-    auto head_time = control->head_block_time();
-    auto next_time = head_time + skip_time;
+    ilog(
+        "Produced skip time block ${id}... #${n} @ ${t} signed by ${p} [trxs: ${count}, lib: ${lib}, confirmed: ${confs}]",
+        ("p", new_bs->header.producer)
+        ("id", new_bs->id.str().substr(8,16))
+        ("n", new_bs->block_num)
+        ("t", new_bs->header.timestamp)
+        ("count", new_bs->block->transactions.size())
+        ("lib", control->last_irreversible_block_num())
+        ("confs", new_bs->header.confirmed));
 
-    if (control->is_building_block())
-        _finish_block();
+    production->resume();
 
-    _start_block(next_time);
-
-    _finish_block();
-
-    _start_block(
-        next_time + fc::microseconds(chain::config::block_interval_us));
 }
 
 void testing_plugin::set_program_options(options_description&, options_description& cfg) {}
@@ -50,7 +53,7 @@ void testing_plugin::plugin_initialize(const variables_map& options) {
 
 void testing_plugin::plugin_startup() {
    // Make the magic happen
-
+    production = &app().get_plugin<producer_plugin>();
     control = &app().get_plugin<chain_plugin>().chain();
 
     eosio_key = private_key_type(
@@ -69,9 +72,9 @@ void testing_plugin::plugin_startup() {
         {"/v1/testing/skiptime", [&](string url, string body, url_response_callback callback) {
             try {
 				fc::variant args = fc::json::from_string(body).get_object();
-                fc::microseconds skip_time(args["time"].as_int64());
+                fc::microseconds time(args["time"].as_int64());
                
-                _produce_block(skip_time);
+                _skip_time(time);
 
                 callback(200, string("ok"));
             } catch (...) {

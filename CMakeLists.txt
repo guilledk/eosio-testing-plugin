@@ -7,6 +7,7 @@ target_link_libraries(
     testing_plugin
     chain_plugin
     http_plugin
+    producer_plugin
     eosio_chain
     appbase
     fc)
