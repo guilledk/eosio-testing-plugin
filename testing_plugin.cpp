@@ -23,10 +23,6 @@ void testing_plugin::_finish_block() {
 }
 
 void testing_plugin::_start_block(chain::time_point when) {
-    auto head_block_number = control->head_block_num();
-    auto last_produced_block_num = control->last_irreversible_block_num();
-    auto confirm_block_num = head_block_number - last_produced_block_num;
-
     control->start_block(when, 0);
 }
 
