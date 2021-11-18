@@ -19,6 +19,9 @@ void testing_plugin::plugin_initialize(const variables_map& options) {
 
 void testing_plugin::plugin_startup() {
 
+    tester_instance = new testing::tester(
+        &app().get_plugin<chain_plugin>().chain());
+
     app().get_plugin<http_plugin>().add_api({
         {"/v1/testing/version", [&](string url, string body, url_response_callback callback) {
             try {
@@ -35,8 +38,24 @@ void testing_plugin::plugin_startup() {
 
                 testing_time_provider::get().set_time(args["time"].as_int64());
 
-                if (args["abort"].as_bool())
-                    app().get_plugin<chain_plugin>().chain().abort_block();
+                callback(200, string("ok"));
+            } catch (...) {
+                http_plugin::handle_exception("testing", "settime", body, callback);
+            }
+        }}
+    });
+    app().get_plugin<http_plugin>().add_api({
+        {"/v1/testing/skiptime", [&](string url, string body, url_response_callback callback) {
+            try {
+				fc::variant args = fc::json::from_string(body).get_object();
+
+                int64_t skip = args["time"].as_int64();
+                int64_t time = testing_time_provider::get().get_time();
+
+                testing_time_provider::get().set_time(time + skip);
+                ilog("time was: {t}", ("t",time));
+                ilog("time is:  {t}", ("t",time + skip));
+                tester_instance->produce_block(fc::microseconds(skip));
 
                 callback(200, string("ok"));
             } catch (...) {

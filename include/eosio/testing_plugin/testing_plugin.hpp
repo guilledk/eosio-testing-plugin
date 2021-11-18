@@ -2,7 +2,9 @@
 #include <eosio/http_plugin/http_plugin.hpp>
 #include <eosio/chain_plugin/chain_plugin.hpp>
 
-#include <eosio/chain/name.hpp>
+#include <eosio/testing/tester.hpp>
+
+#include <boost/test/unit_test.hpp>
 
 #include <fc/time.hpp>
 #include <fc/io/json.hpp>
@@ -14,6 +16,7 @@ using std::string;
 using std::to_string;
 
 using fc::testing_time_provider;
+
 
 namespace eosio {
 
@@ -31,6 +34,7 @@ namespace eosio {
 
         private:
             std::unique_ptr<class testing_plugin_impl> my;
+            testing::tester* tester_instance;
     };
 
 }
