@@ -6,6 +6,7 @@ add_library(testing_plugin
 target_link_libraries(
     testing_plugin
     http_plugin
+    chain_plugin
     eosio_chain
     appbase
     fc)

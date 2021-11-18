@@ -32,8 +32,11 @@ void testing_plugin::plugin_startup() {
         {"/v1/testing/settime", [&](string url, string body, url_response_callback callback) {
             try {
 				fc::variant args = fc::json::from_string(body).get_object();
-               
+
                 testing_time_provider::get().set_time(args["time"].as_int64());
+
+                if (args["abort"].as_bool())
+                    app().get_plugin<chain_plugin>().chain().abort_block();
 
                 callback(200, string("ok"));
             } catch (...) {
